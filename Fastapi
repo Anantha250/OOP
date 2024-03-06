@@ -1,0 +1,569 @@
+from datetime import datetime, date, time, timedelta
+import re
+from fastapi import FastAPI
+from pydantic import BaseModel
+
+app = FastAPI()
+
+class WaterPark:
+    def __init__(self, name):
+        self.__name = name
+        self.__stock_list = None
+        self.__daily_stock = []
+        self.__customer_list = []
+        self.__member_list = []
+        self.__coupon_list = []
+        self.__booking_list = []
+        self.__reward_list = []
+        self.__booking_list = []
+        
+    def is_correct_info(self,email, phone_no):
+       
+       email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+       is_valid_email = re.match(email_pattern, email) is not None
+
+       phone_pattern = r'^[0-9]{10}$'
+       is_valid_phone = re.match(phone_pattern, phone_no) is not None
+
+       return is_valid_email, is_valid_phone
+
+    def search_member_from_id(self,id):
+        for member in self.__member_list:
+            if id == member.get_member_id():
+                return member
+   
+    def add_booking(self,booking):
+        self.__booking_list.append(booking)
+
+    def search_daily_stock_from_date(self,date):
+        for dailystock in self.__daily_stock:
+            if dailystock.date == date():
+                return dailystock
+    
+    def add_member(self,member):
+        if not isinstance(member,Member):
+            return "Error"
+        self.__member_list.append(member)
+
+    def add_customer(self,customer):
+        if not isinstance(customer,Customer):
+            return "Error"
+        self.__customer_list.append(customer)
+
+    def search_coupon_by_code(self,code):
+       for search in self.__coupon:
+           if search == code():
+               return search
+    
+    def get_booking_list(self):
+        # สร้างรายการว่างเพื่อเก็บรายการการจองทั้งหมด
+        booking_list = []
+        # วนลูปผ่านรายการการจองทั้งหมดแล้วเพิ่มข้อมูลเกี่ยวกับการจองลงในรายการ
+        for booking in self.__booking_list:
+            booking_list.append({
+                "booking_id": booking.booking_id,
+                "order": booking.order,
+                "customer": booking.customer.get_name(),  # เข้าถึงข้อมูลลูกค้าและดึงชื่อ
+                "date" : booking.date_time
+            })
+        return booking_list
+    
+
+
+class Booking :
+    __booking_id = 1
+    def __init__(self, customer, order, order_datetime):
+        self.__customer = customer
+        self.__booking_id = Booking.__booking_id
+        self.__order = order
+        self.__order_datetime = order_datetime
+        self.__status = False #ispaid ?
+        Booking.__booking_id +=1
+        
+    @property
+    def booking_id(self):
+        return self.__booking_id
+    @property
+    def order(self):
+        return self.__order
+    @property
+    def customer(self):
+        return self.__customer
+    @property
+    def date_time(self):
+        return self.__order_datetime
+    
+    
+    def update_status(self):
+        self.__status = True
+        return "Done" 
+    
+    def get_booking_detail(self):
+        order = self.__order
+        customer = self.__customer
+        date = self.__order_datetime
+        return {"detail": order, "customer": [customer.name, customer.email],"date": date}
+
+
+class Stock:
+    def __init__(self):
+        self.__cabana_list = []
+        self.__medium_locker_amount = 80
+        self.__large_locker_amount = 20
+        self.__towel_amount = 5000
+        self.__towel_price = 99
+    
+    def get_all_price(self):
+        return {
+            self.__cabana_list,self.__medium_locker_amount,self.__large_locker_amount,self.__towel_amount
+        }
+    
+    
+    @property
+    def towel_price(self):
+        return self.__towel_price
+    
+class DailyStock(Stock):
+    def __init__(self, date):
+        super().__init__()
+        self.__date = date
+        self.__booking_list = []
+    
+    @property
+    def date(self):
+        return self.__date
+    
+    def is_available(self, item, amount):
+        if isinstance(item, Cabana):
+            return not item.is_reseve # If reserved = Not available
+        elif not isinstance(item, Ticket):
+            return item.remaining_amount >= amount
+        elif not isinstance(item,Locker):
+            return item.remaining_amount >= amount
+        elif not isinstance(item,Towel):
+            return item.remaining_amount >= amount
+        return True
+                  
+
+def create_daily_stock():
+    daily_list = []
+    daily_list.append(DailyStock(date(2024, 2, 1)))
+    daily_list.append(DailyStock(date(2024, 2, 2)))
+    daily_list.append(DailyStock(date(2024, 2, 3)))
+    daily_list.append(DailyStock(date(2024, 2, 4)))
+    daily_list.append(DailyStock(date(2024, 2, 5)))
+    daily_list.append(DailyStock(date(2024, 2, 6)))
+    daily_list.append(DailyStock(date(2024, 2, 7)))
+    daily_list.append(DailyStock(date(2024, 2, 8)))
+    daily_list.append(DailyStock(date(2024, 2, 9)))
+    daily_list.append(DailyStock(date(2024, 2, 10)))
+    
+    return daily_list
+
+
+        
+class Cabana:
+    def __init__(self, id, size, zone):
+        self.__id = id
+        self.__size = size
+        self.__zone = zone
+        cabana_price = {'S':899, 'M':1499, 'L':2499}
+        for size, price in cabana_price.items():
+            if self.__size == size:
+                self.__price = price
+        self.__is_reserve = False
+    
+    def __str__(self):
+        return f"Cabana({self.__size}): {self.__zone} Zone"
+    
+    @property
+    def id(self):
+        return self.__id
+    
+    @property
+    def size(self):
+        return self.__size
+    
+    @property
+    def zone(self):
+        return self.__zone
+    
+    @property
+    def is_reserve(self):
+        return self.__is_reserve
+        
+    @property    
+    def price(self):
+        return self.__price
+    
+    def update_is_reserve(self, type): # A = Add, R = Remove
+        if type == 'A':
+            self.__is_reserve = True
+        elif type == 'R':
+            self.__is_reserve = False
+    
+ 
+class Locker:
+    def __init__(self, size, price, remaining_amount):
+        self.__size = size
+        self.__price = price
+        self.__remaining_amount = remaining_amount
+    
+    def __str__(self):
+        return f"Locker: Size {self.__size}"
+    
+    @property
+    def size(self):
+        return self.__size
+        
+    @property
+    def price(self):
+        return self.__price
+    
+    @property
+    def remaining_amount(self):
+        return self.__remaining_amount
+    
+    def update_remaining_amount(self, type, amount): # A = Add, R = Remove
+        if type == 'A':
+            self.remaining_amount += amount
+        elif type == 'R':
+            self.remaining_amount -= amount
+    
+    @property
+    def size(self):
+        return self.__size
+    
+    @property
+    def remaining_amount(self):
+        return self.__remaining_amount
+    
+class Towel:
+    def __init__(self):
+        self.__price = 99
+        self.__remaining_amount = 5000
+    
+    def __str__(self):
+        return f"Towel: "
+        
+    @property
+    def price(self):
+        return self.__price
+    
+    @property
+    def remaining_amount(self):
+        return self.__remaining_amount
+    
+    def update_remaining_amount(self, type, amount): # A = Add, R = Remove
+        if type == 'A':
+            self.remaining_amount += amount
+        elif type == 'R':
+            self.remaining_amount -= amount
+        
+
+class Payment :
+    def __init__(self, booking: Booking, datetime):
+        if not isinstance(booking, Booking):
+            return None
+        self.__booking = booking
+        self.__transcation_id = None
+        self.__status = False
+        self.__create_datetime = datetime
+        
+    @property
+    def booking(self):
+        return self.__booking
+
+    def gen_payment():
+        pass
+    def update_status(self, transaction_id):
+        self.__status = True
+        self.__transcation_id = transaction_id
+
+class Bank(Payment):
+    def __init__(self, booking: Booking, datetime):
+        Payment.__init__(self, booking, datetime)
+        self.__account_no = None
+
+    def gen_payment():
+        pass
+    def update_status(self, transaction_id, account_no):
+        self.__status = True
+        self.__transcation_id = transaction_id
+        self.__account_no = account_no
+
+class Card(Payment):
+    def __init__(self, booking: Booking, datetime):
+        Payment.__init__(self, booking, datetime)
+        self.__card_no = None
+        self.__card_pin = None
+
+    def gen_payment():
+        pass
+
+
+class Order:
+    def __init__(self, visit_date: date):
+        self.__visit_date = visit_date
+        self.__order_detail = []
+        self.__total = 0  
+        self.__promotion = None
+        
+    @property
+    def visit_date(self):
+        return self.__visit_date
+    
+    @property
+    def order_detail(self):
+        return self.__order_detail
+    
+    @property
+    def promotion(self):
+        return self.__promotion
+    
+    @property
+    def total(self):
+        for item in self.__order_detail:
+            self.__total += item.total_price
+        return self.__total
+    
+    def add_order_detail(self, item):
+        for order_detail in self.__order_detail_list:
+            if order_detail.item == item:
+                order_detail.amount += 1
+                return "Done"
+        self.__selected_item_list.append(order_detail)
+        return "Done"
+    
+    
+    def reserve(self):
+        for order_detail in self.__order_detail_list:
+            item = order_detail.item
+            if isinstance(item, Cabana):
+                item.is_reseve = True
+            elif not isinstance(self.__item, Ticket):
+                item.remaining_amount -= order_detail.amount
+        return "Done"
+    
+class OrderDetail:
+    def __init__(self, item, amount = 1):
+        self.__item = item  # ใส่เป็น instance 
+        self.__amount = amount
+        self.__total_price = 0
+        
+    @property
+    def item(self):
+        return self.__item
+    
+    @property 
+    def amount(self):
+        return self.__amount
+    
+    @property
+    def total_price(self):
+        return self.__item.price * self.__amount
+    
+    def check_still_available(self) -> bool:
+        for order_detail in self.__order_detail_list:
+            item = order_detail.item
+            if isinstance(item, Cabana):
+                return not item.is_reseve #ถ้าจองแล้ว = ไม่ว่าง
+            elif not isinstance(item, Ticket):
+                return item.remaining_amount >= order_detail.amount
+        return True
+
+
+
+class Ticket:
+    def __init__(self, type, amount_per_ticket, price = 0):
+        self.__type = type
+        self.__amount_per_ticket = amount_per_ticket
+        self.__price = price
+        self.__is_thai = True
+    
+    def __str__(self):
+        return f"Ticket: {self.__type}"
+    
+    @property
+    def type(self):
+        return self.__type
+    
+    @property
+    def amount(self):
+        return self.__amount
+    
+    @property
+    def is_thai(self):
+        return self.__is_thai
+    
+    @property
+    def price(self):
+        if not(self.__is_thai) and self.__price != 0:
+            if self.__amount_per_ticket == 1:
+                return self.__price + 200                       
+            else :
+                return self.__price + 150 * self.__amount_per_ticket
+        else:
+            return self.__price
+        
+    def update_is_thai(self, type): # F = Foreign, T = Thai
+        if type == 'T':
+            self.__is_thai = True
+        elif type == 'F':
+            self.__is_thai = False
+
+class Promotion:
+    def __init__(self, start_date: date, end_date: date):
+        self.__start_date = start_date
+        self.__end_date = end_date       
+    
+    def get_available_date(self):
+        date_list = [self.__start_date + timedelta(days = x) for x in range((self.__end_date - self.__start_date).days + 1)]
+        return date_list
+    
+class Coupon(Promotion):
+    def __init__(self, code, discount, min_purchase, start_date, end_date):
+        super().__init__(start_date, end_date)
+        self.__code = code
+        self.__discount = discount
+        self.__min_purchase = min_purchase  # ยอดซื้อขั้นต่ำ
+    
+    @property
+    def code(self):
+        return self.__code
+    
+    @property
+    def discount(self):
+        return self.__discount
+    
+    @property
+    def min_purchase(self):
+        return self.__min_purchase    
+       
+class Customer:
+    def __init__(self, name, email, phone_number):
+        self.__name = name
+        self.__email = email
+        self.__phone_number = phone_number
+        self.__booking_list = []
+    
+    def get_name(self):
+        return {
+            self.__name,self.__email,self.__phone_number
+                }
+    @property
+    def email(self):
+        return self.__email
+    
+    @property
+    def phone_number(self):
+        return self.__phone_number
+        
+class Member(Customer):
+    def __init__(self, name, email, phone_number, birthday):
+        super().__init__(name, email, phone_number)
+        self.__birthday = birthday
+        self.__password = None
+        
+    @property
+    def password(self):
+        return self.__password    
+        
+    def __add__(self, amounts):
+        if amounts > 0:
+            self.__point += amounts
+            return 'Success'
+        else: 
+            return 'Invalid Amounts'
+        
+    def __sub__(self, amounts):
+        if self.__point >= amounts > 0:
+            self.__point -= amounts
+            return 'Success'
+        else: 
+            return 'Not enough points'
+    
+    def check_password(self, password):
+        for char in password:
+            if char.isnumeric() or char.isalpha() or char == '.':
+                continue
+            return False
+        
+    def add_password(self, password):
+        if len(password) >= 8 and self.check_password(password) != False:
+            self.__password = password
+            return 'Success'
+        elif len(password) < 8:
+            return 'Please use a password with at least 8 characters.'
+        elif self.check_password(password) == False:
+            return 'Please use passwords that contain only the letters 0-9, a-z, A-Z, or (.)'
+        else: 
+            return 'Please use a password with at least 8 characters and only the letters 0-9, a-z, A-Z, or (.)' 
+    
+    def get_member_id(self):
+        return self.__id
+    
+
+        
+stock = Stock()
+
+waterPark = WaterPark("Rama")
+
+search_date = date(2024, 2, 16)
+
+found_daily_stock = waterPark.search_daily_stock_from_date(search_date)
+
+k06 = Cabana('K06', 'S', 'Family')
+towel01 = Towel()
+l01 = Locker('S',259,100)
+ticket1 = Ticket('Full day',1,699)
+
+testselected_order = OrderDetail(l01,99)
+testselected_order_date = DailyStock(search_date)
+
+
+is_available = testselected_order_date.is_available(testselected_order.item, testselected_order.amount)
+if is_available:
+    print("The products are available.")
+else:
+    print("The products are not available.")
+
+james = Customer('Louis', 'james123@gmail.com', '0812345678')
+
+test_incor = waterPark.is_correct_info(james.email,james.phone_number)
+
+print(test_incor)
+
+Customer1 = waterPark.add_customer(james) ## Correct
+
+Booking_test = Booking(james,testselected_order.item,search_date)
+
+Booking1 = waterPark.add_booking(Booking_test)
+
+print(waterPark.get_booking_list()) ## Correct
+
+test_price = testselected_order.total_price
+print(test_price)
+
+@app.get("/order_detail", tags = ['order_detail'])
+def bookinglist():
+    return waterPark.get_booking_list()
+
+@app.get("/price", tags = ['price'])
+def price():
+    return test_price
+
+@app.get("/customer_detail", tags = ['customer_detail'])
+def customer():
+    return james
+
+
+
+# @app.post("/main", tags = ['Main'])
+# def main(customer: Customer):
+#     return customer
+
+
+
+
+#print(daily.show_cabana())
