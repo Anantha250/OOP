@@ -1,7 +1,8 @@
 from datetime import datetime, date, time, timedelta
 import re
-from fastapi import FastAPI,HTTPException
+from fastapi import FastAPI,HTTPException,Query
 from pydantic import BaseModel
+from typing import List
 
 app = FastAPI()
 
@@ -752,8 +753,11 @@ dkub = WaterPark("Dkub")
 
 my_order = dkub.create_order(date(2024, 2, 2))
 
+my_order2 = dkub.create_order(date(2024, 2, 2))
 
 daily_stock = dkub.search_daily_stock_from_date(my_order.visit_date)
+
+daily_stock = dkub.search_daily_stock_from_date(my_order2.visit_date)
 
 towel = daily_stock.towel
 
@@ -768,6 +772,9 @@ dkub.add_item(locker_L, my_order)
 dkub.add_item(my_ticket, my_order)
 dkub.remove_item(towel, my_order)
 
+dkub.add_item(towel, my_order2)
+dkub.add_item(towel, my_order2)
+
 total = my_order.total
 
 print(total)
@@ -781,22 +788,40 @@ if my_order.apply_coupon(coupon_test):
 else:
     print("Coupon cannot be applied. Total amount does not meet minimum purchase requirement.")
 
-james = Member('Louis', 'james123@asd.com', '0812345678',date(2004,4,18))
+james = Member('Jame', 'james123@asd.com', '0812345678',date(2004,4,18))
+
+beam = Member('Beam', 'Beam@asd.com', '0921239393',date(2004,4,18))
 
 
-Customer1 = dkub.add_member(james)
+Customer1 = dkub.add_member(beam)
+Customer2 = dkub.add_member(james)
 
-Booking_test = Booking(james,my_order)
+Booking_test = Booking(beam,my_order2)
 
-Booking1 = james.add_booking(Booking_test)
+Booking_test2 = Booking(james,my_order)
+
+Booking2 = beam.add_booking(Booking_test)
+
+Booking1 = james.add_booking(Booking_test2)
+
+print(beam.get_booking_list())
 
 
-print(james.get_booking_list())
+class PhoneInput(BaseModel):
+    phone_number: str
 
+@app.get("/order_detail", tags=['order_detail'])
+def bookinglist(phone_number: str = Query(...)):
+    member_booking_lists = []
+    for member in dkub.get_member_list():
+        if member.phone_number == phone_number:
+            member_booking_lists = member.get_booking_list()
+            break
 
-@app.get("/order_detail", tags = ['order_detail'])
-def bookinglist():
-    return james.get_booking_list()
+    if not member_booking_lists:
+        return {"message": "No bookings found for the provided phone number"}
+
+    return {"phone_number": phone_number, "booking_list": member_booking_lists}
 
 @app.get("/price", tags = ['price'])
 def price():
@@ -805,16 +830,29 @@ def price():
 valid_coupons = {
     "CODE123": Coupon("CODE123", 100, 1000, date.today(), date.today() + timedelta(days=30))
 }
-
 class CouponInput(BaseModel):
     code: str
-
+    
 @app.post("/apply_coupon", tags=['coupon'])
-def apply_coupon(coupon_input: CouponInput):
+def apply_coupon(coupon_input: CouponInput, booking_id: int = Query(...)):
     
     coupon_code = coupon_input.code
+
+    # ตรวจสอบว่า booking_id นี้มีอยู่จริงในระบบหรือไม่
+    booking_exists = False
+    for member in dkub.get_member_list():
+        for booking in member.get_booking_list():
+            if booking["booking_id"] == booking_id:
+                booking_exists = True
+                break
+        if booking_exists:
+            break
+
+    if not booking_exists:
+        raise HTTPException(status_code=404, detail="Booking ID not found")
+
     if coupon_code not in valid_coupons:
-        raise HTTPException(status_code=404, detail="Coupon not found")
+        raise HTTPException(status_code=404, detail="COUPON NOT FOUND")
     
     
     coupon = valid_coupons[coupon_code]
@@ -826,4 +864,3 @@ def apply_coupon(coupon_input: CouponInput):
         return {"message": "Coupon applied successfully!", "new_total_after_discount": my_order.total}
     else:
         return {"message": "Coupon cannot be applied."}
-
