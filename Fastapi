@@ -1,6 +1,6 @@
 from datetime import datetime, date, time, timedelta
 import re
-from fastapi import FastAPI
+from fastapi import FastAPI,HTTPException
 from pydantic import BaseModel
 
 app = FastAPI()
@@ -8,75 +8,111 @@ app = FastAPI()
 class WaterPark:
     def __init__(self, name):
         self.__name = name
-        self.__stock_list = None
-        self.__daily_stock = []
-        self.__customer_list = []
+        self.__stock = Stock()
+        self.__daily_stock_list = create_daily_stock()
+        self.__zone_list = ['Wave Pool', 'Activity and Relax', 'Hill', 'Family']
         self.__member_list = []
-        self.__coupon_list = []
-        self.__booking_list = []
-        self.__reward_list = []
-        self.__booking_list = []
+        self.__promotion_list = []
+        self.__payment_list = []
+        self.__transaction_list = []
+    
+    def get_member_list(self):
+        return self.__member_list
         
-    def is_correct_info(self,email, phone_no):
-       
-       email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    def add_daily_stock(self, daily):
+        self.__daily_stock_list.append(daily)    
+        
+    def add_member(self, member):
+        if isinstance(member, Member):
+            self.__member_list.append(member)
+        else: return 'Error'
+    
+        
+    def search_member_from_id(self, id):
+        for member in self.__member_list:
+            if id == member.id:
+                return member
+        return 'Not Found' 
+    
+    def search_daily_stock_from_date(self, date):
+        for daily in self.__daily_stock_list:
+            if date == daily.date:
+                return daily
+        return 'Not Found'  
+    
+    def get_services_in_stock(self, stock):
+        services = {}
+        services["Ticket"] = stock.ticket_list
+        services["Cabana"] = stock.cabana_list
+        services["Locker"] = stock.locker_list
+        services["Towel"] = stock.towel
+        return services    
+        
+    def get_all_services(self) : # When press services button
+        return self.get_services_in_stock(self.__stock)
+        
+    def get_services_in_date(self, date): # After selected date
+        daily_stock = self.search_daily_stock_from_date(date)
+        return self.get_services_in_stock(daily_stock)
+    
+    def get_zone(self):
+        return self.__zone_list
+    
+    def get_cabana_in_zone(self, date):
+        daily_stock = self.search_daily_stock_from_date(date)
+        cabana_in_zone = {}
+        for zone in self.__zone_list:
+            cabana_in_zone[zone] = daily_stock.get_cabana_in_zone(zone)
+        return cabana_in_zone
+    
+    def create_order(self, date):
+        return Order(date)
+    
+    def add_item(self, item, order): # Press (+) button.
+        daily_stock = self.search_daily_stock_from_date(order.visit_date)
+        if daily_stock.is_available(item, 1):
+            order.add_item(item)
+        return order
+    
+    def remove_item(self, item, order): # Press (-) button.
+        return order.remove_item(item)
+    
+    def become_member(self, name, email, phone_number, birthday, password):
+        for member in self.__member_list:
+            if email == member.email or phone_number == member.phone_number:
+                return 'You are already a member.' 
+        if Member.check_email(email):
+            if Member.check_phone_number(phone_number) and len(phone_number) == 10:
+                if Member.check_password(password) and len(password) >= 8:
+                    self.add_member(Member(name, email, phone_number, birthday, password))
+                    return 'Membership registration completed.'
+                return 'Please use a password with at least 8 characters and only the letters 0-9, a-z, A-Z, or (.)'
+            return 'Fill the correct phone number.'
+        return 'Fill the correct email.'                 
+
+    def verify_member(self, email, password):
+        for member in self.__member_list:
+            member.verify_member(email, password)
+        return 'Email or password is incorrect.'
+    
+    def iscorrect_info(self,email, phone_no):
+
+       email_pattern = r'^[a-zA-Z0-9.%+-]+@[a-zA-Z0-9.-]+.[a-zA-Z]{2,}$'
        is_valid_email = re.match(email_pattern, email) is not None
 
        phone_pattern = r'^[0-9]{10}$'
        is_valid_phone = re.match(phone_pattern, phone_no) is not None
 
        return is_valid_email, is_valid_phone
-
-    def search_member_from_id(self,id):
-        for member in self.__member_list:
-            if id == member.get_member_id():
-                return member
-   
-    def add_booking(self,booking):
-        self.__booking_list.append(booking)
-
-    def search_daily_stock_from_date(self,date):
-        for dailystock in self.__daily_stock:
-            if dailystock.date == date():
-                return dailystock
-    
-    def add_member(self,member):
-        if not isinstance(member,Member):
-            return "Error"
-        self.__member_list.append(member)
-
-    def add_customer(self,customer):
-        if not isinstance(customer,Customer):
-            return "Error"
-        self.__customer_list.append(customer)
-
-    def search_coupon_by_code(self,code):
-       for search in self.__coupon:
-           if search == code():
-               return search
-    
-    def get_booking_list(self):
-        # สร้างรายการว่างเพื่อเก็บรายการการจองทั้งหมด
-        booking_list = []
-        # วนลูปผ่านรายการการจองทั้งหมดแล้วเพิ่มข้อมูลเกี่ยวกับการจองลงในรายการ
-        for booking in self.__booking_list:
-            booking_list.append({
-                "booking_id": booking.booking_id,
-                "order": booking.order,
-                "customer": booking.customer.get_name(),  # เข้าถึงข้อมูลลูกค้าและดึงชื่อ
-                "date" : booking.date_time
-            })
-        return booking_list
     
 
 
 class Booking :
     __booking_id = 1
-    def __init__(self, customer, order, order_datetime):
-        self.__customer = customer
+    def __init__(self, member, order):
+        self.__member = member
         self.__booking_id = Booking.__booking_id
         self.__order = order
-        self.__order_datetime = order_datetime
         self.__status = False #ispaid ?
         Booking.__booking_id +=1
         
@@ -87,8 +123,8 @@ class Booking :
     def order(self):
         return self.__order
     @property
-    def customer(self):
-        return self.__customer
+    def member(self):
+        return self.__member
     @property
     def date_time(self):
         return self.__order_datetime
@@ -107,21 +143,56 @@ class Booking :
 
 class Stock:
     def __init__(self):
-        self.__cabana_list = []
-        self.__medium_locker_amount = 80
-        self.__large_locker_amount = 20
-        self.__towel_amount = 5000
-        self.__towel_price = 99
+        self.__cabana_list = create_cabana()
+        self.__locker_list = create_locker()
+        self.__ticket_list = create_ticket()
+        self.__towel = Towel()
     
-    def get_all_price(self):
-        return {
-            self.__cabana_list,self.__medium_locker_amount,self.__large_locker_amount,self.__towel_amount
-        }
+    @property
+    def cabana_list(self):
+        return self.__cabana_list
     
+    @property
+    def locker_list(self):
+        return self.__locker_list
+    
+    @property
+    def ticket_list(self):
+        return self.__ticket_list
+    
+    @property
+    def towel(self):
+        return self.__towel
     
     @property
     def towel_price(self):
-        return self.__towel_price
+        return self.__towel
+    
+    def add_cabana(self, cabana):
+        if isinstance(cabana, Cabana):
+            self.__cabana_list.append(cabana)
+        else: return 'Error'
+            
+    def add_locker(self, locker):
+        if isinstance(locker, Locker):
+            self.__locker_list.append(locker)
+        else: return 'Error'
+            
+    def add_ticket(self, ticket):
+        if isinstance(ticket, Ticket):
+            self.__ticket_list.append(ticket)
+        else: return 'Error'
+    
+    def show_all(self):
+        pass 
+    
+    def get_cabana_in_zone(self, cabana_zone):
+        for zone in range (len(self.__cabana_list)):
+            for cabana in range (len(self.__cabana_list[zone])):
+                if cabana_zone == self.__cabana_list[zone][cabana].zone:
+                    return self.__cabana_list[zone]
+                cabana_zone += 1        
+        return None
     
 class DailyStock(Stock):
     def __init__(self, date):
@@ -138,12 +209,7 @@ class DailyStock(Stock):
             return not item.is_reseve # If reserved = Not available
         elif not isinstance(item, Ticket):
             return item.remaining_amount >= amount
-        elif not isinstance(item,Locker):
-            return item.remaining_amount >= amount
-        elif not isinstance(item,Towel):
-            return item.remaining_amount >= amount
         return True
-                  
 
 def create_daily_stock():
     daily_list = []
@@ -202,7 +268,6 @@ class Cabana:
         elif type == 'R':
             self.__is_reserve = False
     
- 
 class Locker:
     def __init__(self, size, price, remaining_amount):
         self.__size = size
@@ -229,15 +294,45 @@ class Locker:
             self.remaining_amount += amount
         elif type == 'R':
             self.remaining_amount -= amount
+                
+class Ticket:
+    def __init__(self, type, amount_per_ticket, price = 0):
+        self.__type = type
+        self.__amount_per_ticket = amount_per_ticket
+        self.__price = price
+        self.__is_thai = True
+    
+    def __str__(self):
+        return f"Ticket: {self.__type}"
     
     @property
-    def size(self):
-        return self.__size
+    def type(self):
+        return self.__type
     
     @property
-    def remaining_amount(self):
-        return self.__remaining_amount
+    def amount(self):
+        return self.__amount
     
+    @property
+    def is_thai(self):
+        return self.__is_thai
+    
+    @property
+    def price(self):
+        if not(self.__is_thai) and self.__price != 0:
+            if self.__amount_per_ticket == 1:
+                return self.__price + 200                       
+            else :
+                return self.__price + 150 * self.__amount_per_ticket
+        else:
+            return self.__price
+        
+    def update_is_thai(self, type): # F = Foreign, T = Thai
+        if type == 'T':
+            self.__is_thai = True
+        elif type == 'F':
+            self.__is_thai = False
+            
 class Towel:
     def __init__(self):
         self.__price = 99
@@ -303,38 +398,73 @@ class Card(Payment):
 
 
 class Order:
-    def __init__(self, visit_date: date):
+    def __init__(self, visit_date):
         self.__visit_date = visit_date
         self.__order_detail = []
-        self.__total = 0  
-        self.__promotion = None
-        
+        self.__total = 0
+        self.__coupon = None
+    
+    def __str__(self):
+        return f"{[order for order in self.__order_detail]}\nTOTAL: {self.total}"
+    
     @property
     def visit_date(self):
         return self.__visit_date
     
     @property
-    def order_detail(self):
-        return self.__order_detail
-    
-    @property
-    def promotion(self):
-        return self.__promotion
-    
-    @property
     def total(self):
-        for item in self.__order_detail:
-            self.__total += item.total_price
+        self.__total = 0 
+        for items in self.__order_detail:
+            self.__total += items.total_price
+        if self.__coupon:
+            self.__total -= self.__coupon.discount  # ลดราคาตามค่าส่วนลดจากคูปอง
         return self.__total
     
-    def add_order_detail(self, item):
-        for order_detail in self.__order_detail_list:
-            if order_detail.item == item:
-                order_detail.amount += 1
-                return "Done"
-        self.__selected_item_list.append(order_detail)
-        return "Done"
+    @property
+    def order_detail(self):
+        return self.__order_detail
+        
+    def add_item(self, item) : # Press the add button
+        if isinstance(item, Cabana):
+            for items in self.__order_detail:
+                if isinstance(items.item, Cabana):
+                    return self
+        elif isinstance(item, (Locker, Towel, Ticket)):
+            for items in self.__order_detail:
+                if items.item == item:
+                    items + 1
+                    return self
+        self.__order_detail.append(OrderDetail(item))         
+        return self
     
+    def remove_item(self, item) : # Press the reduce button
+        for items in self.__order_detail:
+            if item == items.item:
+                items - 1
+                if items.amount == 0:
+                   self.__order_detail.remove(items)
+                return self
+        return self
+    
+    def apply_coupon(self, coupon): 
+        if coupon.is_expired():
+            return False, "Coupon has expired"
+        
+        if self.__total >= coupon.min_purchase:
+            self.__coupon = coupon
+            self.__total -= coupon.discount  # ลดราคาตามค่าส่วนลดจากคูปอง
+            return True, "Coupon applied successfully"
+        else:
+            return False, "Minimum purchase amount not met for this coupon"
+
+    # def check_still_available(self) -> bool:
+    #     for order_detail in self.__order_detail_list:
+    #         item = order_detail.item
+    #         if isinstance(item, Cabana):
+    #             return not item.is_reseve # If reserved = Not available
+    #         elif not isinstance(item, Ticket):
+    #             return item.remaining_amount >= order_detail.amount
+    #     return True
     
     def reserve(self):
         for order_detail in self.__order_detail_list:
@@ -345,11 +475,23 @@ class Order:
                 item.remaining_amount -= order_detail.amount
         return "Done"
     
+    
 class OrderDetail:
     def __init__(self, item, amount = 1):
         self.__item = item  # ใส่เป็น instance 
         self.__amount = amount
         self.__total_price = 0
+    
+    def __str__(self):
+        return f"{self.item} x {self.__amount} = {self.total_price} THB"
+    
+    def __add__(self, amount):
+        if 0 < amount:
+            self.__amount += 1
+        
+    def __sub__(self, amount):
+        if 0 < amount <= self.__amount:
+            self.__amount -= amount 
         
     @property
     def item(self):
@@ -412,22 +554,18 @@ class Ticket:
         elif type == 'F':
             self.__is_thai = False
 
-class Promotion:
-    def __init__(self, start_date: date, end_date: date):
-        self.__start_date = start_date
-        self.__end_date = end_date       
     
-    def get_available_date(self):
-        date_list = [self.__start_date + timedelta(days = x) for x in range((self.__end_date - self.__start_date).days + 1)]
-        return date_list
-    
-class Coupon(Promotion):
-    def __init__(self, code, discount, min_purchase, start_date, end_date):
-        super().__init__(start_date, end_date)
+class Coupon:
+    def __init__(self, code, discount, min_purchase, start_date: date, end_date : date):
         self.__code = code
         self.__discount = discount
+        self.__end_date = end_date
         self.__min_purchase = min_purchase  # ยอดซื้อขั้นต่ำ
     
+    def is_expired(self):
+        today = datetime.now().date()
+        return today > self.__end_date
+
     @property
     def code(self):
         return self.__code
@@ -438,36 +576,36 @@ class Coupon(Promotion):
     
     @property
     def min_purchase(self):
-        return self.__min_purchase    
+        return self.__min_purchase
+    
+    def get_discount_amount(self):
+        return self.__discount
        
-class Customer:
-    def __init__(self, name, email, phone_number):
-        self.__name = name
-        self.__email = email
-        self.__phone_number = phone_number
-        self.__booking_list = []
-    
-    def get_name(self):
-        return {
-            self.__name,self.__email,self.__phone_number
-                }
-    @property
-    def email(self):
-        return self.__email
-    
-    @property
-    def phone_number(self):
-        return self.__phone_number
         
-class Member(Customer):
+class Member():
     def __init__(self, name, email, phone_number, birthday):
-        super().__init__(name, email, phone_number)
+        self.__email = email
+        self.__name = name
+        self.__phone_number = phone_number
         self.__birthday = birthday
         self.__password = None
+        self.__booking_list = []
         
     @property
     def password(self):
-        return self.__password    
+        return self.__password
+    
+    @property
+    def email(self):
+        return self.__email  
+    
+    @property
+    def name(self):
+        return self.__name   
+    
+    @property
+    def phone_number(self):
+        return self.__phone_number  
         
     def __add__(self, amounts):
         if amounts > 0:
@@ -475,6 +613,33 @@ class Member(Customer):
             return 'Success'
         else: 
             return 'Invalid Amounts'
+    
+    def add_booking(self,booking):
+        self.__booking_list.append(booking)
+    
+    def get_name(self):
+        return self.__name
+    
+    def get_email(self):
+        return self.__email
+    
+    def get_phone(self):
+        return self.__phone_number
+    
+    
+    def get_booking_list(self):
+        # สร้างรายการว่างเพื่อเก็บรายการการจองทั้งหมด
+        booking_list = []
+        # วนลูปผ่านรายการการจองทั้งหมดแล้วเพิ่มข้อมูลเกี่ยวกับการจองลงในรายการ
+        for booking in self.__booking_list:
+            booking_list.append({
+                "booking_id": booking.booking_id,
+                "order": booking.order,  # เข้าถึงข้อมูลลูกค้าและดึงชื่อ
+                "name" : booking.member.get_name(),
+                "email" : booking.member.get_email(),
+                "phone" : booking.member.get_phone(),
+            })
+        return booking_list
         
     def __sub__(self, amounts):
         if self.__point >= amounts > 0:
@@ -504,66 +669,161 @@ class Member(Customer):
         return self.__id
     
 
+def create_cabana():
+    
+    wave_pool_zone = []
+    wave_pool_zone.append(Cabana('W01', 'S', 'Wave Pool')) # Wave Pool Zone
+    wave_pool_zone.append(Cabana('W02', 'S', 'Wave Pool'))
+    wave_pool_zone.append(Cabana('W03', 'M', 'Wave Pool'))
+    wave_pool_zone.append(Cabana('W04', 'M', 'Wave Pool'))
+    wave_pool_zone.append(Cabana('W05', 'M', 'Wave Pool'))
+    wave_pool_zone.append(Cabana('W06', 'M', 'Wave Pool'))
+    wave_pool_zone.append(Cabana('W07', 'M', 'Wave Pool'))
+    wave_pool_zone.append(Cabana('W08', 'M', 'Wave Pool'))
+    wave_pool_zone.append(Cabana('W09', 'M', 'Wave Pool'))
+    wave_pool_zone.append(Cabana('W10', 'S', 'Wave Pool'))
+    wave_pool_zone.append(Cabana('W11', 'S', 'Wave Pool'))
+    wave_pool_zone.append(Cabana('W12', 'S', 'Wave Pool'))
+    wave_pool_zone.append(Cabana('W13', 'L', 'Wave Pool'))
+    wave_pool_zone.append(Cabana('W14', 'S', 'Wave Pool'))
+    wave_pool_zone.append(Cabana('W15', 'M', 'Wave Pool'))
+    wave_pool_zone.append(Cabana('W16', 'M', 'Wave Pool'))
+    wave_pool_zone.append(Cabana('W14', 'S', 'Wave Pool'))
+    wave_pool_zone.append(Cabana('W14', 'S', 'Wave Pool'))
+    wave_pool_zone.append(Cabana('W14', 'S', 'Wave Pool'))
+    wave_pool_zone.append(Cabana('P05', 'S', 'Wave Pool'))
+    wave_pool_zone.append(Cabana('P06', 'S', 'Wave Pool'))
+
+    activity_relax_zone = []
+    activity_relax_zone.append(Cabana('P01', 'S', 'Activity and Relax')) # Activity and Relax Zone
+    activity_relax_zone.append(Cabana('P02', 'S', 'Activity and Relax'))
+    activity_relax_zone.append(Cabana('P03', 'M', 'Activity and Relax'))
+    activity_relax_zone.append(Cabana('P04', 'M', 'Activity and Relax'))
+
+    hill_zone = []
+    hill_zone.append(Cabana('H01', 'S', 'Activity and Relax')) # Hill Zone
+    hill_zone.append(Cabana('H02', 'S', 'Activity and Relax'))
+    hill_zone.append(Cabana('H03', 'S', 'Activity and Relax'))
+    hill_zone.append(Cabana('H04', 'M', 'Activity and Relax'))
+    hill_zone.append(Cabana('H05', 'M', 'Activity and Relax'))
+
+    family_zone = []
+    family_zone.append(Cabana('F01', 'M', 'Family')) # Family Zone
+    family_zone.append(Cabana('F02', 'S', 'Family'))
+    family_zone.append(Cabana('F03', 'L', 'Family'))
+    family_zone.append(Cabana('F04', 'S', 'Family'))
+    family_zone.append(Cabana('F05', 'M', 'Family'))
+    family_zone.append(Cabana('F06', 'M', 'Family'))
+    family_zone.append(Cabana('K05', 'M', 'Family'))
+    family_zone.append(Cabana('K06', 'M', 'Family'))
+    family_zone.append(Cabana('K07', 'S', 'Family'))
+    
+    cabana_list = []
+    cabana_list.extend([wave_pool_zone, activity_relax_zone, hill_zone, family_zone])
+    return cabana_list
+
+def create_locker():
+    locker_list = []
+    locker_list.append(Locker('M', 149, 80)) # Locker
+    locker_list.append(Locker('L', 229, 20))
+    
+    return locker_list
+    
+def create_ticket():
+    ticket_list = []
+    
+    # Solo Ticket
+    ticket_list.append(Ticket('Full Day', 1, 699))
+    ticket_list.append(Ticket('Senior', 1, 599)) # >= 60 y.o. and want to play slides
+    ticket_list.append(Ticket('Child', 1, 0))
+    ticket_list.append(Ticket('SPD', 1, 0)) # including pregnant and disabled 
+
+    # Group Ticket
+    ticket_list.append(Ticket('Group for 4', 4, 2599))
+    ticket_list.append(Ticket('Group for 6', 6, 3779))
+    ticket_list.append(Ticket('Group for 8', 8, 4879))
+    ticket_list.append(Ticket('Group for 10', 10, 5999))
+    
+    return ticket_list
         
 stock = Stock()
 
-waterPark = WaterPark("Rama")
+dkub = WaterPark("Dkub")
 
-search_date = date(2024, 2, 16)
-
-found_daily_stock = waterPark.search_daily_stock_from_date(search_date)
-
-k06 = Cabana('K06', 'S', 'Family')
-towel01 = Towel()
-l01 = Locker('S',259,100)
-ticket1 = Ticket('Full day',1,699)
-
-testselected_order = OrderDetail(l01,99)
-testselected_order_date = DailyStock(search_date)
+my_order = dkub.create_order(date(2024, 2, 2))
 
 
-is_available = testselected_order_date.is_available(testselected_order.item, testselected_order.amount)
-if is_available:
-    print("The products are available.")
+daily_stock = dkub.search_daily_stock_from_date(my_order.visit_date)
+
+towel = daily_stock.towel
+
+for locker in daily_stock.locker_list:
+    locker_L = locker
+for ticket in daily_stock.ticket_list: 
+    my_ticket = ticket
+
+dkub.add_item(towel, my_order)
+dkub.add_item(towel, my_order)
+dkub.add_item(locker_L, my_order)
+dkub.add_item(my_ticket, my_order)
+dkub.remove_item(towel, my_order)
+
+total = my_order.total
+
+print(total)
+
+coupon_test = Coupon("CODE123",100, 1000, date.today(), date.today() + timedelta(days=30))
+
+
+if my_order.apply_coupon(coupon_test):
+    print("Coupon applied successfully!")
+    print("New total after discount:", my_order.total)
 else:
-    print("The products are not available.")
+    print("Coupon cannot be applied. Total amount does not meet minimum purchase requirement.")
 
-james = Customer('Louis', 'james123@gmail.com', '0812345678')
+james = Member('Louis', 'james123@asd.com', '0812345678',date(2004,4,18))
 
-test_incor = waterPark.is_correct_info(james.email,james.phone_number)
 
-print(test_incor)
+Customer1 = dkub.add_member(james)
 
-Customer1 = waterPark.add_customer(james) ## Correct
+Booking_test = Booking(james,my_order)
 
-Booking_test = Booking(james,testselected_order.item,search_date)
+Booking1 = james.add_booking(Booking_test)
 
-Booking1 = waterPark.add_booking(Booking_test)
 
-print(waterPark.get_booking_list()) ## Correct
+print(james.get_booking_list())
 
-test_price = testselected_order.total_price
-print(test_price)
 
 @app.get("/order_detail", tags = ['order_detail'])
 def bookinglist():
-    return waterPark.get_booking_list()
+    return james.get_booking_list()
 
 @app.get("/price", tags = ['price'])
 def price():
-    return test_price
+    return total
 
-@app.get("/customer_detail", tags = ['customer_detail'])
-def customer():
-    return james
+valid_coupons = {
+    "CODE123": Coupon("CODE123", 100, 1000, date.today(), date.today() + timedelta(days=30))
+}
 
+class CouponInput(BaseModel):
+    code: str
 
+@app.post("/apply_coupon", tags=['coupon'])
+def apply_coupon(coupon_input: CouponInput):
+    
+    coupon_code = coupon_input.code
+    if coupon_code not in valid_coupons:
+        raise HTTPException(status_code=404, detail="Coupon not found")
+    
+    
+    coupon = valid_coupons[coupon_code]
+    if my_order.total < coupon.min_purchase:
+        raise HTTPException(status_code=400, detail="Minimum purchase amount not met for this coupon")
 
-# @app.post("/main", tags = ['Main'])
-# def main(customer: Customer):
-#     return customer
+    
+    if my_order.apply_coupon(coupon):
+        return {"message": "Coupon applied successfully!", "new_total_after_discount": my_order.total}
+    else:
+        return {"message": "Coupon cannot be applied."}
 
-
-
-
-#print(daily.show_cabana())
